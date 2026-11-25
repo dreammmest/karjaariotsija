@@ -171,6 +171,9 @@ td.pr{text-align:right;white-space:nowrap}
 .altbox .altsel td{background:color-mix(in srgb,var(--accent) 8%,transparent)}.altbox .up{color:var(--accent)}.altbox .down{color:#2f8f4e}
 .pres,#pout,#out{min-width:0;max-width:100%}.tbl{max-width:100%;position:relative}
 .vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.qpop .leaflet-popup-content-wrapper,.qpop .leaflet-popup-tip{background:var(--panel);color:var(--ink);border:1px solid var(--line);box-shadow:0 6px 24px rgba(0,0,0,.28)}.qpop .leaflet-popup-content{margin:12px 14px;font-size:13px;line-height:1.4;font-family:var(--f-body)}.qpop a.leaflet-popup-close-button{color:var(--muted)}.qi .qh{display:flex;flex-direction:column;gap:2px;margin:0 18px 8px 0}.qi .qh b{font-size:14.5px;font-family:var(--f-display)}.qt,.qp{width:100%;border-collapse:collapse}.qt th{text-align:left;font-weight:500;color:var(--muted);padding:2px 10px 2px 0;vertical-align:top;white-space:nowrap;font-size:12px}.qt td{padding:2px 0;vertical-align:top}.qsec{margin-top:10px;padding-top:8px;border-top:1px solid var(--line)}.qlab{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:4px}.qp td{padding:4px 0;border-bottom:1px solid var(--line);vertical-align:top}.qp td.km{text-align:right;white-space:nowrap;padding-left:10px}.qp tr:last-child td{border-bottom:0}.qp tr.on td{background:var(--accent-soft)}.qp tr.on td:first-child{box-shadow:inset 3px 0 0 var(--accent);padding-left:6px}.qlinks{margin-top:8px}.qpop .leaflet-popup-scrolled{border:0}
+.qsheet{position:absolute;left:8px;right:8px;bottom:8px;z-index:800;max-height:62%;display:none;flex-direction:column;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:12px;box-shadow:0 6px 24px rgba(0,0,0,.32);font-size:13px;line-height:1.4;font-family:var(--f-body)}.qsheet.on{display:flex}.qsheet .qbody{overflow:auto;padding:12px 14px;-webkit-overflow-scrolling:touch}.qsheet .qx{position:absolute;top:4px;right:6px;border:0;background:transparent;color:var(--muted);font-size:22px;line-height:1;width:32px;height:32px;cursor:pointer}
+.qpop tbody tr:hover td{background:transparent}.qpop .qp tr.on td,.qpop .qp tr.on:hover td{background:var(--accent-soft)}
 </style>
 <div class="wrap">
 <header>
@@ -416,6 +419,7 @@ function run(){
 }
 
 function render(){
+ try{if(QPOPID!=null){const q=Q.find(x=>x.id===QPOPID);if(q)qShow(qInfo(q))}}catch(e){}
  const o=$("out");if(!target){o.innerHTML="";return}
  const qty=num("qty",0),rate=num("rate",0.2),road=num("road",1.3);
  let h="";
@@ -502,8 +506,68 @@ const MK=new Map();
 Q.forEach(q=>{const m=L.circleMarker([q.lat,q.lon],{renderer:R,radius:3,weight:1,fillOpacity:1});m._q=q;
   m.on("mouseover",()=>{const mm=matching(q).filter(p=>p.p!=null);const pr=mm.length?Math.min(...mm.map(p=>p.p)):null;
     m.bindTooltip(`<b>${esc(q.nimi)}</b><br>${pr!=null?"alates "+eur(pr)+" €/t":esc(q.mat.join(", "))}${target?" · "+fmtKm(hav(target.lat,target.lon,q.lat,q.lon))+" km linnulennult":""}`,{direction:"top",offset:[0,-4]}).openTooltip()});
-  m.on("click",e=>{L.DomEvent.stopPropagation(e);const i=res.findIndex(z=>z.q.id===q.id);if(i>=0){sel=i;render();draw()}else m.openTooltip()});
+  m.on("click",e=>{L.DomEvent.stopPropagation(e);m.closeTooltip();qClick(q)});
   m.addTo(gPts);MK.set(q.id,m)});
+/* ---------- karjääri infokaart (avaneb punktile vajutades) ---------- */
+const QPOP=L.popup({className:"qpop",maxWidth:360,minWidth:250,maxHeight:380,autoPanPadding:[16,16],closeButton:true});
+let QPOPID=null;
+QPOP.on("remove",()=>{if(!QSHEET.classList.contains("on"))QPOPID=null});
+/* kitsal ekraanil (telefon) avaneb info kaardi allservas lehena, sest hüpikaken ei mahu ära */
+const QSHEET=L.DomUtil.create("div","qsheet qpop",map.getContainer());
+QSHEET.innerHTML='<button type="button" class="qx" aria-label="Sulge">×</button><div class="qbody"></div>';
+L.DomEvent.disableClickPropagation(QSHEET);L.DomEvent.disableScrollPropagation(QSHEET);
+QSHEET.querySelector(".qx").onclick=()=>{QSHEET.classList.remove("on");QPOPID=null};
+map.on("click",()=>{if(QSHEET.classList.contains("on")){QSHEET.classList.remove("on");QPOPID=null}});
+const qNarrow=()=>map.getSize().x<520;
+function qShow(html){if(QSHEET.classList.contains("on"))QSHEET.querySelector(".qbody").innerHTML=html;else if(map.hasLayer(QPOP))QPOP.setContent(html)}
+function qClick(q){
+  if(MODE!=="proj"){const i=res.findIndex(z=>z.q.id===q.id);if(i>=0&&i!==sel){sel=i;render();draw()}}
+  openQInfo(q)}
+function openQInfo(q){
+  QPOPID=q.id;
+  if(qNarrow()){map.closePopup(QPOP);const b=QSHEET.querySelector(".qbody");b.innerHTML=qInfo(q);b.scrollTop=0;QSHEET.classList.add("on");return}
+  QSHEET.classList.remove("on");
+  const ms=map.getSize();QPOP.options.maxWidth=Math.min(360,ms.x-64);QPOP.options.minWidth=Math.min(250,QPOP.options.maxWidth);QPOP.options.maxHeight=Math.max(180,Math.min(380,ms.y-110));
+  QPOP.setLatLng([q.lat,q.lon]).setContent(qInfo(q)).openOn(map)}
+function monthsTo(d){const m=(d||"").match(/^(\d{4})-(\d{2})/);if(!m)return null;const n=new Date();return (m[1]-n.getFullYear())*12+(m[2]-(n.getMonth()+1))}
+function qInfo(q){
+  const row=(k,v)=>v==null||v===""?"":`<tr><th>${k}</th><td>${v}</td></tr>`;
+  const [Nn,E]=LE.toLest(q.lat,q.lon);
+  /* loa staatus */
+  let st="";
+  if(q.kuni){const mt=monthsTo(q.kuni);st=q.kuni<TODAY?` <span class="pill warn">luba lõppenud</span>`:mt!=null&&mt<12?` <span class="pill warn">lõpeb ${mt<=1?"lähikuul":mt+" kuu pärast"}</span>`:""}
+  const zn=q.zn&&q.zn!=="MA"?ZN[q.zn]:"";
+  let h=`<div class="qi"><div class="qh"><b>${esc(q.nimi)}</b><span class="tag2">${esc(q.liik||"")}${q.mat.length?" · "+esc(q.mat.join(", ")):""}</span></div><table class="qt">`;
+  h+=row(q.riik==="LV"?"Kaevandaja":"Loa omanik",esc(q.kaev||"–"));
+  h+=row(q.riik==="LV"?"Limiidi nr":"Loa number",esc(q.luba||"–"));
+  h+=row("Kehtib kuni",(q.kuni?fmtDate(q.kuni):"–")+st);
+  h+=row("Mäeeraldis",q.ha!=null?String(q.ha).replace(".",",")+" ha":"");
+  h+=row("Asukoht",`${q.lat.toFixed(5)}, ${q.lon.toFixed(5)}<br><span class="tag2">L-EST97 X ${Math.round(Nn)}, Y ${Math.round(E)}${zn?" · "+zn:""}</span>`);
+  if(q.riik==="LV")h+=row("Riik",`Läti${q.bkm!=null?" · Eesti piirist ~"+fmtKm(q.bkm)+" km":""}`);
+  h+=`</table>`;
+  /* kaugus ja hind valitud objektini */
+  if(MODE!=="proj"&&target){
+    const z=res.find(x=>x.q.id===q.id)||noPrice.find(x=>x.q.id===q.id);let rt=z&&z.rt;
+    if(!rt){const rate=num("rate",0.2),road=num("road",1.3),load=Math.max(1,num("load",25));rt=netRoute(netFrom(target.lat,target.lon,rate,load),q,[target.lat,target.lon],target.zn||ZONE(target.lat,target.lon),road,rate,load)}
+    const ri=res.findIndex(x=>x.q.id===q.id);
+    h+=`<div class="qsec"><div class="qlab">Objektini</div>${fmtKm(rt.km)} km ${rt.net?"mööda teid":"(hinnang)"}${rt.min!=null?" · ~"+Math.round(rt.min)+" min":""}${rt.fer&&rt.fer.length?` · <span class="tag2 fer">praam: ${rt.fer.map(f=>esc(f.nimi)).join(", ")}</span>`:""}<br>Vedu ${eur(rt.haul)} €/t`;
+    if(ri>=0&&res[ri].total!=null)h+=` · <b>koos materjaliga ${eur(res[ri].total)} €/t</b> <span class="tag2">(${ri+1}. koht)</span>`;
+    h+=`</div>`}
+  if(MODE==="proj"&&PRES){const n=PRES.rows.filter(x=>x.pick&&x.pick.q.id===q.id).length;if(n)h+=`<div class="qsec"><div class="qlab">Projektis</div>valitud ${n} kihile</div>`}
+  /* tooted ja hinnad */
+  const mset=new Set(MODE!=="proj"?matching(q):[]);
+  if(q.P.length){
+    const P=[...q.P].sort((a,b)=>a.g-b.g||(a.p??1e9)-(b.p??1e9));
+    h+=`<div class="qsec"><div class="qlab">Tooted ja hinnad (${P.length})</div><table class="qp"><tbody>`+P.map(p=>`<tr${mset.has(p)?' class="on"':""}><td>${esc(p.t)}${p.fr&&!String(p.t).includes(p.fr)?" "+esc(p.fr):""}${p.la?`<br><span class="tag2">${esc(p.la)}${p.pe?" · "+esc(p.pe):""}</span>`:p.pe?`<br><span class="tag2">${esc(p.pe)}</span>`:""}</td><td class="km">${p.p!=null?eur(p.p)+" €/t"+oldMark(p):"päringul"}${p.d?`<br><span class="tag2">${p.ov?"muudetud ":""}${fmtDate(p.d)}</span>`:""}</td></tr>`).join("")+`</tbody></table>`;
+    const ops=[...new Set(P.map(p=>p.o).filter(Boolean))];if(ops.length)h+=`<div class="tag2">Müüja: ${ops.map(esc).join(", ")}</div>`;
+    h+=`</div>`}
+  else h+=`<div class="qsec tag2">Hinnakirja andmeid pole – hind tuleb küsida loa omanikult.</div>`;
+  /* lingid */
+  const srcs=[...new Set(q.P.map(p=>p.s).filter(s=>s&&/^https?:/.test(s)))].slice(0,3);
+  const host=u=>{try{return new URL(u).hostname.replace(/^www\./,"")}catch(e){return u}};
+  const reg=REGSRC(q),ru=reg.split(" ")[0];
+  h+=`<div class="qlinks">${srcs.map(u=>`<a class="flink" href="${esc(u)}" target="_blank" rel="noopener">Hinnakiri: ${esc(host(u))}</a>`).join("")}<a class="flink" href="${esc(ru)}" target="_blank" rel="noopener">${q.riik==="LV"?"LVĢMC register":"Maavarade register"}</a><a class="flink" href="https://www.google.com/maps/search/?api=1&query=${q.lat},${q.lon}" target="_blank" rel="noopener">Google Maps</a></div>`;
+  return h+`</div>`}
 function rad(){const z=map.getZoom();return z<8?2.4:z<10?3.2:z<12?4.5:6}
 let lastKey="",AUTOFIT=true;
 function draw(){
@@ -519,10 +583,10 @@ function draw(){
   const rl=(z,st)=>z.rt.path.forEach(s=>L.polyline(s.p,s.f?{renderer:R,color:FC,weight:Math.max(2,st.weight),opacity:Math.max(.7,st.opacity),dashArray:"7 6",interactive:false}:Object.assign({renderer:R,interactive:false},st)).addTo(gRes));
   res.forEach((z,i)=>{if(i!==sel)rl(z,{color:acc,weight:1.2,opacity:.45})});
   res.forEach((z,i)=>{const m=L.circleMarker([z.q.lat,z.q.lon],{renderer:R,radius:i===sel?r+5:r+2.5,color:pan,weight:i===sel?2.5:1,fillColor:acc,fillOpacity:1});
-    m.on("click",e=>{L.DomEvent.stopPropagation(e);sel=i;render();draw()});
+    m.on("click",e=>{L.DomEvent.stopPropagation(e);m.closeTooltip();qClick(z.q)});
     m.bindTooltip(`${i+1}. ${esc(z.q.nimi)} · ${z.total==null?"hind päringul":eur(z.total)+" €/t"}`,{direction:"top",offset:[0,-6]});m.addTo(gRes)});
   noPrice.forEach(x=>{rl(x,{color:ink,weight:1,opacity:.35,dashArray:"4 5"});
-    L.circleMarker([x.q.lat,x.q.lon],{renderer:R,radius:r+2.5,color:acc,weight:2,fillColor:pan,fillOpacity:1}).bindTooltip(`${esc(x.q.nimi)} · ${x.kind==="päringul"?"toode olemas, hind päringul":"registri maavara: "+esc(x.q.mat.join(", "))} · ${fmtKm(x.km)} km`,{direction:"top",offset:[0,-6]}).addTo(gRes)});
+    L.circleMarker([x.q.lat,x.q.lon],{renderer:R,radius:r+2.5,color:acc,weight:2,fillColor:pan,fillOpacity:1}).on("click",function(e){L.DomEvent.stopPropagation(e);this.closeTooltip();qClick(x.q)}).bindTooltip(`${esc(x.q.nimi)} · ${x.kind==="päringul"?"toode olemas, hind päringul":"registri maavara: "+esc(x.q.mat.join(", "))} · ${fmtKm(x.km)} km`,{direction:"top",offset:[0,-6]}).addTo(gRes)});
   const b=res[sel];
   if(b){rl(b,{color:acc,weight:3,opacity:1});b.rt.fer.length&&b.rt.path.filter(s=>s.f).forEach(s=>s.p.forEach(pp=>L.circleMarker(pp,{renderer:R,radius:4,color:FC,weight:2,fillColor:pan,fillOpacity:1,interactive:false}).addTo(gRes)));
     L.marker([b.q.lat,b.q.lon],{interactive:false,icon:L.divIcon({className:"mbest",html:`${esc(b.q.nimi)} · ${b.total==null?"hind päringul":eur(b.total)+" €/t"}`,iconSize:null,iconAnchor:[-10,28]})}).addTo(gRes)}
